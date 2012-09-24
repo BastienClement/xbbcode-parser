@@ -54,18 +54,13 @@ class Context {
 		if($this->stack->Head()->CanShift($tag)) {
 			if($this->stack->Mutated()) {
 				return $this->Shift($tag);
-			} elseif($tag->CanShiftOn($this->stack->Head())) {
-				if($this->stack->Mutated()) {
-					return $this->Shift($tag);
+			} else {
+				if($this->stack->Push($tag)) {
+					if($tag->AutoClose())
+						$this->Reduce($tag->Element());
+					return true;
 				} else {
-					if($this->stack->Push($tag)) {
-						$tag->OnShift();
-						if($tag->AutoClose())
-							$this->Reduce($tag->Element());
-						return true;
-					} else {
-						return false;
-					}
+					return false;
 				}
 			}
 		}

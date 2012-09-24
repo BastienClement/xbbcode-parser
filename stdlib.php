@@ -31,16 +31,16 @@ class StdTags {
 		$parser->DefineTag('i',    new SimpleTag('<em>', '</em>'));
 		$parser->DefineTag('u',    new SimpleTag('<span style="font-style: italic;">', '</span>'));
 		
-		$parser->DefineTag('url',  new LinkTag);
-		$parser->DefineTag('img',  new ImageTag);
+		$parser->DefineTag('url',  new LinkTag());
+		$parser->DefineTag('img',  new ImageTag());
 		
-		$parser->DefineTag('c',    new SimpleTag('<code>', '</code>', false, true));
-		$parser->DefineTag('code', new SimpleTag('<pre><code>', '</code></pre>', true, true));
+		$parser->DefineTag('c',    new LeafTag('<code>', '</code>', false));
+		$parser->DefineTag('code', new LeafTag('<pre><code>', '</code></pre>', true));
 		
 		$parser->DefineTag('hr',   new SingleTag('<div class="hr"></div>', true));
 		
-		$parser->DefineTag('list', new ListTag);
-		$parser->DefineTag('*', new ListItemTag);
+		$parser->DefineTag('list', new ListTag());
+		$parser->DefineTag('*', new ListItemTag());
 	}
 }
 

@@ -28,8 +28,11 @@ const DISPLAY_BLOCK   = 1;
 const DISPLAY_INLINE  = 2;
 const DISPLAY_SPECIAL = 3;
 
+//
+// Some useful tools
+//
 abstract class TagTools {
-	public static function SanitizeURL($url) {
+	public static function SanitizeURL($url, $html_encoded = false) {
 		if(!preg_match('#^([a-z0-9]{3,6})://#', $url))
 			$url = 'http://'.$url;
 		
@@ -52,6 +55,7 @@ abstract class TagDefinition {
 	protected $element, $arg, $xargs;
 	
 	protected $content = '';
+	protected $buffer_escape = true;
 	protected $display = DISPLAY_INLINE;
 	
 	// Related objects
@@ -79,88 +83,84 @@ abstract class TagDefinition {
 	
 	// === Tag interface =======================================================
 	
+	//
+	// Does this tag allow children ?
+	//
 	public function AllowChilds() {
 		return true;
 	}
 	
+	//
+	// Append already escaped content to buffer
+	//
 	public function Append($html) {
 		$this->content .= $html;
 	}
 	
+	//
+	// Should this tag be closed automatically ?
+	//
 	public function AutoClose() {
 		return false;
 	}
 	
+	//
+	// Append unescaped data to buffer
+	//
 	public function Bufferize($text) {
-		$this->content .= htmlspecialchars($text);
+		$this->content .= $this->buffer_escape ? htmlspecialchars($text) : $text;
 	}
 	
+	//
+	// Can $tag be shifted on this tag ?
+	//
 	public function CanShift($tag) {
+		// DISPLAY_SPECIAL tags can't be shifted if this function is not overloaded
 		if($tag->Display() == DISPLAY_SPECIAL)
 			return false;
 		
+		// Automatically exit from an inline tag if we shift a block tag
 		if($this->Display() == DISPLAY_INLINE && $tag->Display() == DISPLAY_BLOCK)
 			$this->ctx->Reduce($this->Element());
 		
 		return true;
 	}
 	
-	public function CanShiftOn() {
-		return true;
-	}
-	
+	//
+	// Return the display mode of this tag.
+	// Should be one of the DISPLAY_* constants.
+	//
 	public function Display() {
 		return $this->display;
 	}
 	
+	//
+	// Return the element of this tag (eg: b, i, url)
+	//
 	public function Element() {
 		return $this->element;
 	}
 	
-	public function OnShift() {
-		// Noop
-	}
-	
+	//
+	// Return the HTML code for this tag
+	//
 	public function Reduce() {
 		return $this->content;
 	}
 }
 
-//
-// The root tag
-// Automatically creates the main tag when adding text or inline element to it
-//
-class RootTag extends TagDefinition {
-	public function Bufferize($text) {
-		$main = $this->parser->MainTag()->create($this->ctx);
-		$this->ctx->stack->Push($main);
-		$main->Bufferize($text);
-	}
-	
-	public function CanShift($tag) {
-		if($tag->Display() == DISPLAY_INLINE):
-			$main = $this->parser->MainTag()->create($this->ctx);
-			$this->ctx->Shift($main);
-		endif;
-		return true;
-	}
-}
+// === Tag templates ===========================================================
 
 //
 // A very simple tag surrounding its content with user-defined strings.
 //
 class SimpleTag extends TagDefinition {
-	protected $before, $after, $raw;
+	protected $before, $after;
 	
-	public function __construct($before, $after, $block = false, $raw = false) {
+	public function __construct($before, $after, $block = false) {
 		$this->before  = $before;
 		$this->after   = $after;
 		$this->display = $block ? DISPLAY_BLOCK : DISPLAY_INLINE;
-		$this->raw     = $raw;
-	}
-	
-	public function AllowChilds() {
-		return !$this->raw;
 	}
 	
 	public function Reduce() {
@@ -169,7 +169,20 @@ class SimpleTag extends TagDefinition {
 	}
 }
 
-class SingleTag extends SimpleTag {
+//
+// A leaf tag disallowing all children.
+//
+class LeafTag extends SimpleTag {
+	public function __construct($before, $after, $block = false) {
+		parent::__construct($before, $after, $block);
+	}
+	
+	public function AllowChilds() {
+		return false;
+	}
+}
+
+class SingleTag extends TagDefinition {
 	protected $html;
 	
 	public function __construct($html, $block = false) {
@@ -186,28 +199,146 @@ class SingleTag extends SimpleTag {
 	}
 }
 
+// === Abstract tag templates ==================================================
+
 //
-// The main tag, a simple <p> which exits automatically when adding a block
-// element to it.
+// An abstract tag allowing an argument as content
+//
+abstract class ArgAsContentTag extends TagDefinition {
+	public function __create() {
+		if($this->arg)
+			$this->Bufferize($this->arg);
+	}
+	
+	public function AutoClose() {
+		// Autoclose if argument is given (we already have the tag content)
+		return $this->arg;
+	}
+}
+
+// === System tags =============================================================
+
+//
+// The root tag
+// Automatically creates the main tag when adding text or inline element to it
+//
+class RootTag extends TagDefinition {
+	public function __create() {
+		$this->element = '$root';
+	}
+	
+	public function Bufferize($text) {
+		$main = $this->parser->MainTag()->create($this->ctx);
+		$this->ctx->stack->Push($main);
+		$main->Bufferize($text);
+	}
+	
+	public function CanShift($tag) {
+		if($tag->Display() == DISPLAY_INLINE):
+			$main = $this->parser->MainTag()->create($this->ctx);
+			$this->ctx->Shift($main);
+		endif;
+		
+		return true;
+	}
+}
+
+//
+// The main tag, a simple <p> as a DISPLAY_INLINE element
 //
 class MainTag extends SimpleTag {
 	public function __construct() {
-		parent::__construct("<p>", "</p>", true);
+		parent::__construct("<p>", "</p>");
+		// Note: displayed inline so exits automatically when adding a block element.
 	}
 	
 	public function __create() {
 		$this->element = '$p';
 	}
+}
+
+// === Main tags ===============================================================
+
+//
+// The [url] tag, supports embedded images
+//
+class LinkTag extends SimpleTag {
+	protected $embedded_img = null;
+	
+	public function __construct() {
+		parent::__construct('<a href="#">', '</a>');
+	}
+	
+	public function __create() {
+		if($this->arg)
+			$this->arg = TagTools::SanitizeURL($this->arg);
+	}
 	
 	public function CanShift($tag) {
-		if($tag->Display() == DISPLAY_BLOCK) {
-			$this->ctx->Reduce('$p');
+		// We can't shift more than one image (with embedded mode)
+		if($this->embedded_img)
+			return false;
+		
+		// Hook ourself on the first [img] tag if arg is undefined
+		if($tag instanceof ImageTag && !$this->arg) {
+			$this->embedded_img = $tag;
 			return true;
 		}
 		
-		return parent::CanShift($tag);
+		return $this->arg ? parent::CanShift($tag) : false;
+	}
+	
+	public function Reduce() {
+		if($this->embedded_img)
+			$url = htmlspecialchars($this->embedded_img->GetURL());
+		else
+			$url = $this->arg ? htmlspecialchars($this->arg) : TagTools::SanitizeURL($this->content, true);
+		
+		if($url)
+			$this->before = '<a href="'.$url.'">';
+		
+		return parent::Reduce();
 	}
 }
+
+//
+// The [img] tag
+//
+class ImageTag extends ArgAsContentTag {
+	public function __construct() {
+		$this->buffer_escape = false;
+	}
+	
+	public function Reduce() {
+		// Image URL
+		$url = $this->GetURL();
+		
+		// Alt text
+		$alt = isset($this->xargs['alt']) ? $this->xargs['alt'] : basename($url);
+		
+		// Image styles
+		$styles = array();
+		
+		if(isset($this->xargs['width']) && $size = TagTools::FormatSize($this->xargs['width']))
+			$styles[] = 'width:'.$size;
+		
+		if(isset($this->xargs['height']) && $size = TagTools::FormatSize($this->xargs['height']))
+			$styles[] = 'height:'.$size;
+		
+		$styles = !empty($styles) ? 'style="'.implode(';', $styles).'" ' : '';
+		
+		// Final tag
+		return '<img src="'.htmlspecialchars($url).'" alt="'.htmlspecialchars($alt).'" '.$styles.'/>';
+	}
+	
+	//
+	// Return the unescaped URL for this image
+	//
+	public function GetURL() {
+		return TagTools::SanitizeURL($this->content);
+	}
+}
+
 
 class ListTag extends SimpleTag {
 	public function __construct() {
@@ -236,98 +367,4 @@ class ListItemTag extends SimpleTag {
 		
 		return parent::CanShift($tag);
 	}
-	
-	public function CanShiftOn($tag) {
-		return $tag instanceof ListTag;
-	}
 }
-
-class StandaloneTag extends TagDefinition {
-	public function OnShift() {
-		if(!empty($this->arg))
-			$this->content = $this->arg;
-	}
-	
-	public function AllowChilds() {
-		return false;
-	}
-	
-	public function AutoClose() {
-		return !empty($this->arg);
-	}
-	
-	public function Bufferize($txt) {
-		$this->Append($txt);
-	}
-}
-
-class LinkTag extends TagDefinition {
-	protected $embedded_img = null;
-	
-	public function Bufferize($text) {
-		if($this->embedded_img)
-			return false;
-		
-		return $this->CanShift(null) ? parent::Bufferize($text) : $this->Append($text);
-	}
-	
-	public function CanShift($tag) {
-		if($this->embedded_img)
-			return false;
-		
-		if($tag instanceof ImageTag && empty($this->arg)) {
-			$this->embedded_img = $tag;
-			return true;
-		}
-		
-		return !empty($this->arg);
-	}
-	
-	public function Reduce() {
-		if($this->embedded_img)
-			$url = $this->embedded_img->GetURL();
-		else
-			$url = TagTools::SanitizeURL(!empty($this->arg) ? $this->arg : $this->content);
-		
-		if($url) {
-			$before = '<a href="'.htmlspecialchars($url).'">';
-			$after  = '</a>';
-		} else {
-			$before = $after = '';
-		}
-		
-		return $before.$this->content.$after;
-	}
-}
-
-//
-// The image tag
-//
-class ImageTag extends StandaloneTag {
-	public function Reduce() {
-		// Image URL
-		$url = htmlspecialchars($this->GetURL());
-		
-		// Alternative text
-		$alt = htmlspecialchars(isset($this->xargs['alt']) ? $this->xargs['alt'] : basename($url));
-		
-		// Image styles
-		$styles = array();
-		
-		if(isset($this->xargs['width']) && $size = TagTools::FormatSize($this->xargs['width']))
-			$styles[] = 'width:'.$size;
-		
-		if(isset($this->xargs['height']) && $size = TagTools::FormatSize($this->xargs['height']))
-			$styles[] = 'height:'.$size;
-		
-		$styles = !empty($styles) ? 'style="'.implode(';', $styles).'" ' : '';
-		
-		// Final tag
-		return '<img src="'.$url.'" alt="'.$alt.'" '.$styles.'/>';
-	}
-	
-	public function GetURL() {
-		return ($url = TagTools::SanitizeURL($this->content)) ? $url : $this->content;
-	}
-}
-
