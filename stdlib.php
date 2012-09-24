@@ -27,17 +27,14 @@ namespace XBBC;
 class StdTags {
 	public static function import($parser) {
 		// Defining standards tags
-		$parser->DefineTag('b',    new SimpleTag('<strong>', '</strong>'));
-		$parser->DefineTag('i',    new SimpleTag('<em>', '</em>'));
-		$parser->DefineTag('u',    new SimpleTag('<span style="font-style: italic;">', '</span>'));
-		
-		$parser->DefineTag('url',  new LinkTag());
-		$parser->DefineTag('img',  new ImageTag());
-		
-		$parser->DefineTag('c',    new LeafTag('<code>', '</code>', false));
-		$parser->DefineTag('code', new LeafTag('<pre><code>', '</code></pre>', true));
-		
-		$parser->DefineTag('hr',   new SingleTag('<div class="hr"></div>', true));
+		$parser->DefineTag('b',     new SimpleTag('<strong>', '</strong>'));
+		$parser->DefineTag('i',     new SimpleTag('<em>', '</em>'));
+		$parser->DefineTag('u',     new SimpleTag('<span style="font-style: italic;">', '</span>'));
+		$parser->DefineTag('url',   new LinkTag());
+		$parser->DefineTag('img',   new ImageTag());
+		$parser->DefineTag('c',     new LeafTag('<code>', '</code>', false));
+		$parser->DefineTag('code',  new LeafTag('<pre><code>', '</code></pre>', true));
+		$parser->DefineTag('quote', new QuoteTag());
 		
 		$parser->DefineTag('list', new ListTag());
 		$parser->DefineTag('*', new ListItemTag());

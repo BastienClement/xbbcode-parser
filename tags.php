@@ -61,12 +61,14 @@ abstract class TagDefinition {
 	// Related objects
 	protected $ctx, $parser;
 	
+	public function __construct() {}
+	
 	// === Tag creation utilities ==============================================
 	
 	public final function create(Context $ctx, $element = null, $arg = null, $xargs = null) {
 		$tag = clone $this;
 		
-		$tag->element = $element;
+		$tag->element = $element ? $element : $this->element;
 		$tag->arg     = $arg;
 		$tag->xargs   = $xargs;
 		
@@ -222,8 +224,9 @@ abstract class ArgAsContentTag extends TagDefinition {
 // The root tag
 // Automatically creates the main tag when adding text or inline element to it
 //
-class RootTag extends TagDefinition {
-	public function __create() {
+class RootTag extends SimpleTag {
+	public function __construct() {
+		parent::__construct('', '', true);
 		$this->element = '$root';
 	}
 	
@@ -236,7 +239,7 @@ class RootTag extends TagDefinition {
 	public function CanShift($tag) {
 		if($tag->Display() == DISPLAY_INLINE):
 			$main = $this->parser->MainTag()->create($this->ctx);
-			$this->ctx->Shift($main);
+			$this->ctx->stack->Push($main);
 		endif;
 		
 		return true;
@@ -306,6 +309,7 @@ class LinkTag extends SimpleTag {
 //
 class ImageTag extends ArgAsContentTag {
 	public function __construct() {
+		parent::__construct();
 		$this->buffer_escape = false;
 	}
 	
@@ -336,6 +340,29 @@ class ImageTag extends ArgAsContentTag {
 	//
 	public function GetURL() {
 		return TagTools::SanitizeURL($this->content);
+	}
+}
+
+//
+// The [quote] tag, emulate a new document root
+//
+class QuoteTag extends RootTag {
+	public function __construct() {
+		parent::__construct();
+		$this->before = '<blockquote>';
+		$this->after = '</blockquote>';
+	}
+	
+	public function Reduce() {
+		if($author = $this->GetAuthorString()) {
+			$this->content = '<div class="quote-author">'.htmlspecialchars($author).'</div>'.$this->content;
+		}
+		
+		return parent::Reduce();
+	}
+	
+	public function GetAuthorString() {
+		return $this->arg ? $this->arg.' a écrit :' : false;
 	}
 }
 
