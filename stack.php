@@ -36,6 +36,8 @@ class Stack {
 	private $stack_head;     // Cached value of the stack head
 	private $stack_head_ptr; // Pointer to the stack head
 	
+	private $mutated = false;
+	
 	public function __construct() {
 		$this->stack = new \SplFixedArray($this->stack_size = self::$MAX_SIZE);
 		$this->stack_head = null;
@@ -54,9 +56,10 @@ class Stack {
 	//
 	public function Push(TagDefinition $item) {
 		// Check for stack overflow
-		if($this->stack_head_ptr + 1 >= $this->stack_size):
+		if($this->stack_head_ptr + 1 >= $this->stack_size)
 			return false;
-		endif;
+		
+		$this->mutated = true;
 		
 		// Insert the new head
 		$this->stack[++$this->stack_head_ptr] = $this->stack_head = $item;
@@ -67,17 +70,17 @@ class Stack {
 	// Remove the top-most element of the stack and return it
 	//
 	public function Pop() {
-		if($this->stack_head_ptr < 0):
-			// Stack is empty
+		// Stack is empty
+		if($this->stack_head_ptr < 0)
 			return null;
-		endif;
 		
 		// Move the stack head
-		if(--$this->stack_head_ptr >= 0):
+		if(--$this->stack_head_ptr >= 0)
 			$this->stack_head = $this->stack[$this->stack_head_ptr];
-		else:
+		else
 			$this->stack_head = null;
-		endif;
+		
+		$this->mutated = true;
 		
 		// Return the previous head
 		return $this->stack[$this->stack_head_ptr+1];
@@ -88,17 +91,17 @@ class Stack {
 	// this element's location (starting at 1) from the top of the stack.
 	//
 	public function Contains($el) {
-		if($this->stack_head->Element() == $el):
+		if($this->stack_head->Element() == $el) {
 			// First element is the good one
 			return 1;
-		else:
-			// Check element under the first one
-			for($i = $this->stack_head_ptr - 1, $j = 2; $i > 0; $i--, $j++):
-				if($this->stack[$i]->Element() == $el):
+		} else {
+			// Check elements under the first one
+			for($i = $this->stack_head_ptr - 1, $j = 2; $i > 0; $i--, $j++) {
+				if($this->stack[$i]->Element() == $el) {
 					return $j;
-				endif;
-			endfor;
-		endif;
+				}
+			}
+		}
 		
 		// Element is not in the stack
 		return false;
@@ -114,12 +117,20 @@ class Stack {
 	//
 	// The stack doesn't clear previous cell when Pop() is called. Instead the
 	// head pointer is simply redefined. This function ensure that every
-	// stack-cell over the head pointer are correctly deallocated.
+	// stack-cells over the head pointer are correctly deallocated.
 	//
 	public function Purge() {
-		for($i = $this->stack_head_ptr + 1; $i < $this->stack_size; $i++):
+		for($i = $this->stack_head_ptr + 1; $i < $this->stack_size; $i++) {
 			unset($this->stack[$i]);
-		endfor;
+		}
+	}
+	
+	public function Mutated() {
+		return $this->mutated;
+	}
+	
+	Public function MutatedReset() {
+		$this->mutated = false;
 	}
 }
 

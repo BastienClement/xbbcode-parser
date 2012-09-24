@@ -26,6 +26,7 @@ namespace XBBC;
 
 class Exception extends \Exception {};
 
+require "context.php";
 require "stack.php";
 require "stdlib.php";
 require "tags.php";
@@ -38,11 +39,13 @@ const PARSE_LEAD = 2;   // Only parse lead paragraph if available
 const NO_CODE    = 4;   // Disable XBBCode parsing
 const NO_SMILIES = 8;   // Disable Smilies parsing
 const NO_HTMLESC = 16;  // Disable HTML escaping
+const NO_STDLIB  = 32;  // Prevent the loading of the Stdlib
 
 //
 // Regex used for parsing
 //
 const REGEX_TAG_NAME = '/[\w\-\*]/i';
+const REGEX_XARGS = '/[ \t]+(\w+)(?:[=:](?|"((?:\\\\.|[^"])*)"|([^ \t]*)))?/';
 const REGEX_TAG = <<<END
 /^
 	\[
@@ -51,7 +54,7 @@ const REGEX_TAG = <<<END
 			(\/)  ([\w\-\*]+)
 		|
 			# Open tag
-			()    ([\w\-\*]+)  (?:[=:]([^ \t]+))?  ((?:[ \t]+\w+(?:[=:][^ \t]*)?)*)
+			()    ([\w\-\*]+)  (?:[=:]([^ \t]+))?  ((?:  [ \t]+\w+(?:[=:](?|"(?:\\\\.|[^"])*"|[^ \t]*))?  )*)
 		)
 	\]
 $/x
@@ -79,17 +82,19 @@ class Parser {
 	private $tags    = array();
 	private $smilies = array();
 	
-	// The parse stack
-	private $stack;
-	
 	public function __construct($flags = 0) {
 		$this->flags = $flags;
 		
 		$this->main_tag = new MainTag;
 		$this->root_tag = new RootTag;
+		
+		if(!$this->HasFlag(NO_STDLIB)) {
+			$this->ImportStdTags();
+			$this->ImportStdSmilies();
+		}
 	}
 	
-	// === Stdlib function =====================================================
+	// === Stdlib functions =====================================================
 	
 	//
 	// Import default tags from the stdlib
@@ -107,7 +112,7 @@ class Parser {
 		return $this;
 	}
 	
-	// === Flags function ======================================================
+	// === Flags functions ======================================================
 	
 	//
 	// Enable a specific flag
@@ -150,9 +155,8 @@ class Parser {
 	// Set and retrieve the special halt tag name
 	//
 	public function HaltTagName($tag = null) {
-		if($tag === null):
+		if($tag === null)
 			return $this->halt_tag_name;
-		endif;
 		
 		$this->halt_tag_name = $this->ValidateTagName($tag, true);
 		return $this;
@@ -162,9 +166,8 @@ class Parser {
 	// Set and retrieve the special lead tag name
 	//
 	public function LeadTagName($tag = null) {
-		if($tag === null):
+		if($tag === null)
 			return $this->lead_tag_name;
-		endif;
 		
 		$this->lead_tag_name = $this->ValidateTagName($tag, true);
 		return $this;
@@ -174,9 +177,8 @@ class Parser {
 	// Set and retrieve the special meta tag name
 	//
 	public function MetaTagName($tag = null) {
-		if($tag === null):
+		if($tag === null)
 			return $this->meta_tag_name;
-		endif;
 		
 		$this->meta_tag_name = $this->ValidateTagName($tag, true);
 		return $this;
@@ -186,9 +188,8 @@ class Parser {
 	// Set the main text tag definition (typically a <p>)
 	//
 	public function MainTag(TagDefinition $mainTag = null) {
-		if($mainTag === null):
+		if($mainTag === null)
 			return $this->main_tag;
-		endif;
 		
 		$this->main_tag = $mainTag;
 		return $this;
@@ -198,9 +199,8 @@ class Parser {
 	// Set the root tag definition
 	//
 	public function RootTag(TagDefinition $rootTag = null) {
-		if($rootTag === null):
+		if($rootTag === null)
 			return $this->root_tag;
-		endif;
 		
 		$this->root_tag = $rootTag;
 		return $this;
@@ -221,19 +221,25 @@ class Parser {
 	//
 	public function TagDefined($tag, $include_specials = false) {
 		// Check standards tags
-		if(isset($this->tags[$tag])):
+		if(isset($this->tags[$tag]))
 			return true;
-		endif;
 		
 		// Check special tags
 		if($include_specials &&
 			($tag == $this->halt_tag_name
 			|| $tag == $this->lead_tag_name
-			|| $tag == $this->meta_tag_name)):
+			|| $tag == $this->meta_tag_name)) {
 			return true;
-		endif;
-		
+		}
+			
 		return false;
+	}
+	
+	//
+	// Return the TagDefinition for a previously defined tag
+	//
+	public function TagDefinition($tag) {
+		return isset($this->tags[$tag]) ? $this->tags[$tag] : null;
 	}
 	
 	//
@@ -247,71 +253,14 @@ class Parser {
 	// Check and sanitize a tag name
 	//
 	private function ValidateTagName($tag, $check_defined = false) {
-		if(!$this->IsValidTagName($tag)):
+		if(!$this->IsValidTagName($tag))
 			throw new Exception("Invalid tag name: [$tag]");
-		endif;
 		
 		// If required, check that the given tag name is not already defined
-		if($check_defined && $this->TagDefined($tag, true)):
+		if($check_defined && $this->TagDefined($tag, true))
 			throw new Exception("Tag [$tag] is already defined");
-		endif;
 		
 		return strtolower($tag);
-	}
-	
-	// === Stack manipulation functions ========================================
-	
-	//
-	// Add a tag on the stack
-	//
-	private function Shift($el, $arg, $xargs) {
-		$tag = $this->tags[$el]->create($el, $arg, $xargs);
-		return $this->stack->Push($tag);
-	}
-	
-	//
-	// Reduce a given number of element from the stack
-	//
-	private function ReduceElements($nb) {
-		for($i = 0; $i < $nb; $i++):
-			$tag = $this->stack->Pop();
-			$this->stack->Head()->Append($tag->Reduce());
-		endfor;
-	}
-	
-	//
-	// Reduce elements on the stack until a given element is encountered.
-	// If the stack doesn't contains this element, this function does nothing.
-	//
-	private function Reduce($el) {
-		if(!($nb = $this->stack->Contains($el))):
-			return false;
-		endif;
-		
-		$this->ReduceElements($nb);
-		return true;
-	}
-	
-	//
-	// Close all tag left open on the stack and reduce the root tag
-	//
-	private function ReduceAll() {
-		$open_tags = $this->stack->Count() - 1; // Ignore root tag for now
-		if($open_tags < 0):
-			throw new Exception('Root tag is no longer open');
-		endif;
-		
-		// Close all tags left open, don't touch the root tag
-		$this->ReduceElements($open_tags);
-		
-		
-		// The last tag in the stack is the root tag
-		$html = $this->stack->Pop()->Reduce();
-		
-		// Clean the stack
-		unset($this->stack);
-		
-		return $html;
 	}
 	
 	// === Main parsing functions ==============================================
@@ -321,12 +270,11 @@ class Parser {
 	//
 	public function Parse($code) {
 		// Handle halt parser
-		if($this->halt_tag_name && ($halt_offset = stripos($code, "[$this->halt_tag_name]")) !== false):
+		if($this->halt_tag_name && ($halt_offset = stripos($code, "[$this->halt_tag_name]")) !== false)
 			$code = substr($code, 0, $halt_offset);
-		endif;
 		
 		// Extract meta data
-		if($this->meta_tag_name):
+		if($this->meta_tag_name) {
 			$meta = array();
 			
 			$meta_callback = function($matches) use (&$meta) {
@@ -337,72 +285,65 @@ class Parser {
 			$meta_regex = "/\[$this->meta_tag_name\s*(\w+)\s*\](.*?)\[\/$this->meta_tag_name\]/is";
 			$code = preg_replace_callback($meta_regex, $meta_callback, $code);
 			
-			if($this->HasFlag(PARSE_META)):
+			if($this->HasFlag(PARSE_META))
 				return $meta;
-			endif;
-		endif;
+		}
 		
 		// Handle lead parsing
-		if($this->lead_tag_name && ($lead_offset = stripos($code, "[$this->lead_tag_name]")) !== false):
-			if($this->HasFlag(PARSE_LEAD)):
+		if($this->lead_tag_name && ($lead_offset = stripos($code, "[$this->lead_tag_name]")) !== false) {
+			if($this->HasFlag(PARSE_LEAD))
 				$code = substr($code, 0, $lead_offset);
-			else:
+			else
 				$code = substr($code, 0, $lead_offset).substr($code, $lead_offset + strlen($this->lead_tag_name) + 2);
-			endif;
-		endif;
+		}
 		
 		// Parse XBBCode if not disabled
-		if(!$this->HasFlag(NO_CODE)):
+		if(!$this->HasFlag(NO_CODE)) {
 			// Lexer
 			list($tokens, $t_count) = $this->SplitTokens($code);
 			
 			// Parser
-			$this->stack = new Stack($this);
-			$this->stack->Push($this->RootTag()->create());
+			$ctx = new Context($this);
 			
-			foreach($tokens as $token):
-				// Get the top-most element from the tag stack
-				$stack_head = $this->stack->Head();
-				
+			foreach($tokens as $token) {
 				// Reading a tag
-				if($token[0] == '[' && preg_match(REGEX_TAG, $token, $matches)):
+				if($token[0] == '[' && preg_match(REGEX_TAG, $token, $matches)) {
 					@list(, $closing, $el, $arg, $xargs) = $matches;
 					
 					// Check if this tag is defined
-					if($this->TagDefined($el)):
-						if($closing):
-							if($this->Reduce($el)):
-								// Reduced successfully
+					if($this->TagDefined($el)) {
+						if($closing) {
+							// Reduced successfully
+							if($ctx->Reduce($el)) {
 								continue;
-							endif;
-						elseif($stack_head->AllowChild($el)):
+							}
+						} else if($ctx->stack->Head()->AllowChilds()) {
 							$arg   = (!empty($arg)) ? $arg : null;
 							$xargs = (!empty($xargs) && ($xargs[0] == ' ' || $xargs[0] == "\t"))
 								? $this->ParseXArgs($xargs)
 								: null;
 							
-							if($this->Shift($el, $arg, $xargs)):
-								// Shifted successfully
+							// Shifted successfully
+							if($ctx->Shift($el, $arg, $xargs)) {
 								continue;
-							endif;
-						endif;
-					endif;
-				endif;
+							}
+						}
+					}
+				}
 				
 				// Not reading a tag
-				$stack_head->Bufferize($token);
-			endforeach;
+				$ctx->stack->Head()->Bufferize($token);
+			}
 			
 			// Compile and generate HTML from the stack
-			$html = $this->ReduceAll();
-		else:
+			$html = $ctx->ReduceAll();
+		} else {
 			$html = $this->HasFlag(NO_HTMLESC) ? $code : htmlspecialchars($code);
-		endif;
+		}
 		
 		// Parse smilies if not disabled
-		if(!$this->HasFlag(NO_SMILIES)):
+		if(!$this->HasFlag(NO_SMILIES))
 			$html = $this->ParseSmilies($html);
-		endif;
 		
 		return $html;
 	}
@@ -419,12 +360,11 @@ class Parser {
 	// Parse the extended-arguments string
 	//
 	private function ParseXArgs($xargs) {
-		preg_match_all('/[ \t]+(\w+)(?:[=:]([^ \t]*))?/', $xargs, $matches, PREG_SET_ORDER);
+		preg_match_all(REGEX_XARGS, $xargs, $matches, PREG_SET_ORDER);
 		
 		$xargs = array();
-		foreach($matches as $match):
-			$xargs[$match[1]] = isset($match[2]) ? $match[2] : true;
-		endforeach;
+		foreach($matches as $match)
+			$xargs[$match[1]] = isset($match[2]) ? stripcslashes($match[2]) : true;
 		
 		return $xargs;
 	}
