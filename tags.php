@@ -58,6 +58,9 @@ abstract class TagDefinition {
 	protected $buffer_escape = true;
 	protected $display = DISPLAY_INLINE;
 	
+	protected $max_nesting  = 1;
+	protected $over_nesting = 0;
+	
 	// Related objects
 	protected $ctx, $parser;
 	
@@ -88,22 +91,13 @@ abstract class TagDefinition {
 	//
 	// Does this tag allow children ?
 	//
-	public function AllowChilds() {
-		return true;
-	}
+	public function AllowChilds() { return true; }
 	
 	//
 	// Append already escaped content to buffer
 	//
 	public function Append($html) {
 		$this->content .= $html;
-	}
-	
-	//
-	// Should this tag be closed automatically ?
-	//
-	public function AutoClose() {
-		return false;
 	}
 	
 	//
@@ -132,23 +126,38 @@ abstract class TagDefinition {
 	// Return the display mode of this tag.
 	// Should be one of the DISPLAY_* constants.
 	//
-	public function Display() {
-		return $this->display;
-	}
+	public function Display() { return $this->display; }
 	
 	//
 	// Return the element of this tag (eg: b, i, url)
 	//
-	public function Element() {
-		return $this->element;
-	}
+	public function Element() { return $this->element; }
+	
+	//
+	// Should this tag be closed automatically ?
+	//
+	public function EmptyTag() { return false; }
+	
+	//
+	// How many times can this tag be nested into itself
+	//
+	public function MaxNesting() { return $this->max_nesting; }
+	
+	//
+	// Increments or decrements the over-nesting counter
+	//
+	public final function OverNestingIncr() { $this->over_nesting++; }
+	public final function OverNestingDecr() { $this->over_nesting--; }
+	
+	//
+	// Check if this element is over-nested
+	//
+	public final function IsOverNested() { return $this->over_nesting > 0; }
 	
 	//
 	// Return the HTML code for this tag
 	//
-	public function Reduce() {
-		return $this->content;
-	}
+	public function Reduce() { return $this->content; }
 }
 
 // === Tag templates ===========================================================
@@ -179,9 +188,7 @@ class LeafTag extends SimpleTag {
 		parent::__construct($before, $after, $block);
 	}
 	
-	public function AllowChilds() {
-		return false;
-	}
+	public function AllowChilds() { return false; }
 }
 
 class SingleTag extends TagDefinition {
@@ -192,13 +199,8 @@ class SingleTag extends TagDefinition {
 		$this->display = $block ? DISPLAY_BLOCK : DISPLAY_INLINE;
 	}
 	
-	public function AutoClose() {
-		return true;
-	}
-	
-	public function Reduce() {
-		return $this->html;
-	}
+	public function EmptyTag() { return true; }
+	public function Reduce() { return $this->html; }
 }
 
 // === Abstract tag templates ==================================================
@@ -212,7 +214,7 @@ abstract class ArgAsContentTag extends TagDefinition {
 			$this->Bufferize($this->arg);
 	}
 	
-	public function AutoClose() {
+	public function EmptyTag() {
 		// Autoclose if argument is given (we already have the tag content)
 		return $this->arg;
 	}
@@ -347,10 +349,17 @@ class ImageTag extends ArgAsContentTag {
 // The [quote] tag, emulate a new document root
 //
 class QuoteTag extends RootTag {
+	// How many times can quote-tags be nested
+	public static $MAX_NESTING = 3;
+	
 	public function __construct() {
 		parent::__construct();
 		$this->before = '<blockquote>';
 		$this->after = '</blockquote>';
+	}
+	
+	public function MaxNesting() {
+		return self::$MAX_NESTING;
 	}
 	
 	public function Reduce() {

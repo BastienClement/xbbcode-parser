@@ -49,6 +49,15 @@ class Context {
 	public function Shift($el, $arg = null, $xargs = null) {
 		$tag = $el instanceof TagDefinition ? $el : $this->parser->TagDefinition($el)->create($this, $el, $arg, $xargs);
 		
+		// Check nesting
+		if($limit = $tag->MaxNesting()) {
+			if(!$this->stack->CheckNesting($tag->Element(), $limit, $index)) {
+				$this->stack->Pick($index)->OverNestingIncr();
+				return false;
+			}
+		}
+		
+		// Clear the mutation tracking flag
 		$this->stack->MutatedReset();
 		
 		if($this->stack->Head()->CanShift($tag)) {
@@ -56,7 +65,7 @@ class Context {
 				return $this->Shift($tag);
 			} else {
 				if($this->stack->Push($tag)) {
-					if($tag->AutoClose())
+					if($tag->EmptyTag())
 						$this->Reduce($tag->Element());
 					return true;
 				} else {
@@ -84,8 +93,16 @@ class Context {
 	//
 	public function Reduce($el) {
 		// The stack doesn't contain the element
-		if(!($nb = $this->stack->Contains($el)))
+		if(!($idx = $this->stack->Find($el)))
 			return false;
+		
+		if(($tag = $this->stack->Pick($idx)) && $tag->IsOverNested()) {
+			$tag->OverNestingDecr();
+			return false;
+		}
+		
+		// How many elements from the top of the stack to this element (included) ?
+		$nb = $this->stack->Count() - $idx;
 		
 		// Don't auto-close elements if the head does not allow children
 		if(!$this->stack->Head()->AllowChilds() && $nb > 1)

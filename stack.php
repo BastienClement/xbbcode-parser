@@ -87,24 +87,48 @@ class Stack {
 	}
 	
 	//
+	// Returns a specific element from the stack
+	//
+	public function Pick($index) {
+		if($index < 0 || $index > $this->stack_head_ptr)
+			return null;
+		
+		return $this->stack[$index];
+	}
+	
+	//
 	// Check if the stack contains a tag of the given element and return
 	// this element's location (starting at 1) from the top of the stack.
 	//
-	public function Contains($el) {
+	public function Find($el) {
 		if($this->stack_head->Element() == $el) {
 			// First element is the good one
-			return 1;
+			return $this->stack_head_ptr;
 		} else {
 			// Check elements under the first one
-			for($i = $this->stack_head_ptr - 1, $j = 2; $i > 0; $i--, $j++) {
+			for($i = $this->stack_head_ptr - 1; $i > 0; $i--) {
 				if($this->stack[$i]->Element() == $el) {
-					return $j;
+					return $i;
 				}
 			}
 		}
 		
 		// Element is not in the stack
 		return false;
+	}
+	
+	//
+	// Check if there is not too much elements of one type on the stack
+	//
+	public function CheckNesting($el, $limit, &$index = null) {
+		for($i = 0, $c = 0; $i <= $this->stack_head_ptr; $i++) {
+			if($this->stack[$i]->Element() == $el && ++$c >= $limit) {
+				$index = $i;
+				return false;
+			}
+		}
+		
+		return true;
 	}
 	
 	//
