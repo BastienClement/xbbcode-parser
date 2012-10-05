@@ -46,17 +46,7 @@ class Context {
 	//
 	// Add a tag on the stack
 	//
-	public function Shift($el, $arg = null, $xargs = null) {
-		$tag = $el instanceof TagDefinition ? $el : $this->parser->TagDefinition($el)->create($this, $el, $arg, $xargs);
-		
-		// Check nesting
-		if($limit = $tag->MaxNesting()) {
-			if(!$this->stack->CheckNesting($tag->Element(), $limit, $index)) {
-				$this->stack->Pick($index)->OverNestingIncr();
-				return false;
-			}
-		}
-		
+	public function Shift(TagDefinition $tag) {
 		// Clear the mutation tracking flag
 		$this->stack->MutatedReset();
 		
@@ -64,6 +54,14 @@ class Context {
 			if($this->stack->Mutated()) {
 				return $this->Shift($tag);
 			} else {
+				// Check nesting
+				if($limit = $tag->MaxNesting()) {
+					if(!$this->stack->CheckNesting($tag->Element(), $limit, $index)) {
+						$this->stack->Pick($index)->OverNestingIncr();
+						return false;
+					}
+				}
+				
 				if($this->stack->Push($tag)) {
 					if($tag->EmptyTag())
 						$this->Reduce($tag->Element());

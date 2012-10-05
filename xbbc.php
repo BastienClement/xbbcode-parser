@@ -323,8 +323,10 @@ class Parser {
 								? $this->ParseXArgs($xargs)
 								: null;
 							
+							$tag = $this->TagDefinition($el)->create($ctx, $el, $arg, $xargs);
+							
 							// Shifted successfully
-							if($ctx->Shift($el, $arg, $xargs)) {
+							if($ctx->Shift($tag)) {
 								continue;
 							}
 						}
@@ -332,7 +334,8 @@ class Parser {
 				}
 				
 				// Not reading a tag
-				$ctx->stack->Head()->Bufferize($token);
+				if($ctx->stack->Head()->AllowText())
+					$ctx->stack->Head()->Bufferize($token);
 			}
 			
 			// Compile and generate HTML from the stack

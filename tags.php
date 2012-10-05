@@ -45,6 +45,14 @@ abstract class TagTools {
 		else
 			return false;
 	}
+	
+	public static function EscapeText($text, $strip = false) {
+		return str_replace(
+			array("\n\r", "\r\n", "\n", "\r"),
+			'<br />',
+			htmlspecialchars($strip ? trim($text) : $text)
+		);
+	}
 }
 
 //
@@ -94,17 +102,26 @@ abstract class TagDefinition {
 	public function AllowChilds() { return true; }
 	
 	//
+	// And text ?
+	//
+	public function AllowText() { return true; }
+	
+	//
 	// Append already escaped content to buffer
 	//
 	public function Append($html) {
 		$this->content .= $html;
+		return $this;
 	}
 	
 	//
 	// Append unescaped data to buffer
 	//
 	public function Bufferize($text) {
-		$this->content .= $this->buffer_escape ? htmlspecialchars($text) : $text;
+		$this->content .= $this->buffer_escape
+			? TagTools::EscapeText($text, $this->StripWhitespaces())
+			: $text;
+		return $this;
 	}
 	
 	//
@@ -155,6 +172,11 @@ abstract class TagDefinition {
 	public final function IsOverNested() { return $this->over_nesting > 0; }
 	
 	//
+	// Also removes whitespaces when html-encoding
+	//
+	public function StripWhitespaces() { return $this->display != DISPLAY_INLINE; }
+	
+	//
 	// Return the HTML code for this tag
 	//
 	public function Reduce() { return $this->content; }
@@ -167,6 +189,7 @@ abstract class TagDefinition {
 //
 class SimpleTag extends TagDefinition {
 	protected $before, $after;
+	protected $strip_empty = true;
 	
 	public function __construct($before, $after, $block = false) {
 		$this->before  = $before;
@@ -176,7 +199,7 @@ class SimpleTag extends TagDefinition {
 	
 	public function Reduce() {
 		$content = parent::Reduce();
-		return empty($content) ? '': $this->before.$content.$this->after;
+		return empty($content) && $this->strip_empty ? '': $this->before.$content.$this->after;
 	}
 }
 
@@ -259,6 +282,18 @@ class MainTag extends SimpleTag {
 	
 	public function __create() {
 		$this->element = '$p';
+	}
+	
+	public function Bufferize($txt) {
+		$ps = preg_split('/[\n\r]{2,}/', $txt);
+		
+		if(($c = count($ps)) < 1) return;
+		parent::Bufferize($ps[0]);
+		
+		for($i = 1; $i < $c; $i++) {
+			$this->ctx->Reduce('$p');
+			$this->ctx->stack->Head()->Bufferize($ps[$i]);
+		}
 	}
 }
 
@@ -375,32 +410,3 @@ class QuoteTag extends RootTag {
 	}
 }
 
-
-class ListTag extends SimpleTag {
-	public function __construct() {
-		parent::__construct("<ul>", "</ul>", true);
-	}
-	
-	public function CanShift($tag) {
-		if($tag instanceof ListItemTag)
-			return true;
-		
-		return parent::CanShift($tag);
-	}
-}
-
-class ListItemTag extends SimpleTag {
-	public function __construct() {
-		parent::__construct("<li>", "</li>");
-		$this->display = DISPLAY_SPECIAL;
-	}
-	
-	public function CanShift($tag) {
-		if($tag instanceof self) {
-			$this->ctx->Reduce($this->element());
-			return true;
-		}
-		
-		return parent::CanShift($tag);
-	}
-}
