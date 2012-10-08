@@ -133,7 +133,7 @@ class QuoteTag extends RootTag {
 	}
 	
 	public function GetAuthorString() {
-		return $this->arg ? $this->arg.' a écrit :' : false;
+		return $this->arg ? $this->arg.':' : false;
 	}
 }
 

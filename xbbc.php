@@ -239,6 +239,15 @@ class Parser {
 	}
 	
 	//
+	// Remove a tag from the parser tags-table
+	//
+	public function RemoveTag($tag_name) {
+		$this->CheckUsed();
+		unset($this->tags[$tag_name]);
+		return $this;
+	}
+	
+	//
 	// Check if a given tag is defined, optionally including specials tags
 	//
 	public function TagDefined($tag, $include_specials = false) {
