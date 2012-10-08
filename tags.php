@@ -63,11 +63,14 @@ abstract class TagDefinition {
 	protected $element, $arg, $xargs;
 	
 	protected $content = '';
+	protected $text_buffer = '';
 	protected $buffer_escape = true;
 	protected $display = DISPLAY_INLINE;
 	
 	protected $max_nesting  = 1;
 	protected $over_nesting = 0;
+	
+	protected $parse_smilies = true;
 	
 	// Related objects
 	protected $ctx, $parser;
@@ -110,6 +113,7 @@ abstract class TagDefinition {
 	// Append already escaped content to buffer
 	//
 	public function Append($html) {
+		$this->FlushText();
 		$this->content .= $html;
 		return $this;
 	}
@@ -118,9 +122,7 @@ abstract class TagDefinition {
 	// Append unescaped data to buffer
 	//
 	public function Bufferize($text) {
-		$this->content .= $this->buffer_escape
-			? TagTools::EscapeText($text, $this->StripWhitespaces())
-			: $text;
+		$this->text_buffer .= $text;
 		return $this;
 	}
 	
@@ -156,6 +158,24 @@ abstract class TagDefinition {
 	public function EmptyTag() { return false; }
 	
 	//
+	// Flush the text buffer into content buffer
+	//
+	public function FlushText() {
+		// Escape HTML if required
+		if($this->buffer_escape)
+			$this->text_buffer = TagTools::EscapeText($this->text_buffer, $this->StripWhitespaces());
+		
+		// Parse smilies before reducing text-node
+		$this->text_buffer = $this->ctx->parser->ParseSmilies($this->text_buffer, $this->buffer_escape);
+		
+		// Append the text node to the content buffer and clear the text buffer
+		$this->content .= $this->text_buffer;
+		$this->text_buffer = '';
+		
+		return $this;
+	}
+	
+	//
 	// How many times can this tag be nested into itself
 	//
 	public function MaxNesting() { return $this->max_nesting; }
@@ -179,7 +199,10 @@ abstract class TagDefinition {
 	//
 	// Return the HTML code for this tag
 	//
-	public function Reduce() { return $this->content; }
+	public function Reduce() {
+		$this->FlushText();
+		return $this->content;
+	}
 }
 
 // === Tag templates ===========================================================
@@ -214,6 +237,9 @@ class LeafTag extends SimpleTag {
 	public function AllowChilds() { return false; }
 }
 
+//
+// A single tag without closing tag required and without content
+//
 class SingleTag extends TagDefinition {
 	protected $html;
 	
@@ -294,119 +320,6 @@ class MainTag extends SimpleTag {
 			$this->ctx->Reduce('$p');
 			$this->ctx->stack->Head()->Bufferize($ps[$i]);
 		}
-	}
-}
-
-// === Main tags ===============================================================
-
-//
-// The [url] tag, supports embedded images
-//
-class LinkTag extends SimpleTag {
-	protected $embedded_img = null;
-	
-	public function __construct() {
-		parent::__construct('<a href="#">', '</a>');
-	}
-	
-	public function __create() {
-		if($this->arg)
-			$this->arg = TagTools::SanitizeURL($this->arg);
-	}
-	
-	public function CanShift($tag) {
-		// We can't shift more than one image (with embedded mode)
-		if($this->embedded_img)
-			return false;
-		
-		// Hook ourself on the first [img] tag if arg is undefined
-		if($tag instanceof ImageTag && !$this->arg) {
-			$this->embedded_img = $tag;
-			return true;
-		}
-		
-		return $this->arg ? parent::CanShift($tag) : false;
-	}
-	
-	public function Reduce() {
-		if($this->embedded_img)
-			$url = htmlspecialchars($this->embedded_img->GetURL());
-		else
-			$url = $this->arg ? htmlspecialchars($this->arg) : TagTools::SanitizeURL($this->content, true);
-		
-		if($url)
-			$this->before = '<a href="'.$url.'">';
-		
-		return parent::Reduce();
-	}
-}
-
-//
-// The [img] tag
-//
-class ImageTag extends ArgAsContentTag {
-	public function __construct() {
-		parent::__construct();
-		$this->buffer_escape = false;
-	}
-	
-	public function Reduce() {
-		// Image URL
-		$url = $this->GetURL();
-		
-		// Alt text
-		$alt = isset($this->xargs['alt']) ? $this->xargs['alt'] : basename($url);
-		
-		// Image styles
-		$styles = array();
-		
-		if(isset($this->xargs['width']) && $size = TagTools::FormatSize($this->xargs['width']))
-			$styles[] = 'width:'.$size;
-		
-		if(isset($this->xargs['height']) && $size = TagTools::FormatSize($this->xargs['height']))
-			$styles[] = 'height:'.$size;
-		
-		$styles = !empty($styles) ? 'style="'.implode(';', $styles).'" ' : '';
-		
-		// Final tag
-		return '<img src="'.htmlspecialchars($url).'" alt="'.htmlspecialchars($alt).'" '.$styles.'/>';
-	}
-	
-	//
-	// Return the unescaped URL for this image
-	//
-	public function GetURL() {
-		return TagTools::SanitizeURL($this->content);
-	}
-}
-
-//
-// The [quote] tag, emulate a new document root
-//
-class QuoteTag extends RootTag {
-	// How many times can quote-tags be nested
-	public static $MAX_NESTING = 3;
-	
-	public function __construct() {
-		parent::__construct();
-		$this->before = '<blockquote>';
-		$this->after = '</blockquote>';
-	}
-	
-	public function MaxNesting() {
-		return self::$MAX_NESTING;
-	}
-	
-	public function Reduce() {
-		if($author = $this->GetAuthorString()) {
-			$this->content = '<div class="quote-author">'.htmlspecialchars($author).'</div>'.$this->content;
-		}
-		
-		return parent::Reduce();
-	}
-	
-	public function GetAuthorString() {
-		return $this->arg ? $this->arg.' a écrit :' : false;
 	}
 }
 

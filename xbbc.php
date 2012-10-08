@@ -28,17 +28,18 @@ class Exception extends \Exception {};
 
 require "context.php";
 require "stack.php";
-require "stdlib.php";
 require "tags.php";
+require "stdlib.php";
 
 //
 // Parsing flags
 //
 const PARSE_META = 1;   // Only extract the meta-data array and return it
 const PARSE_LEAD = 2;   // Only parse lead paragraph if available
+
 const NO_CODE    = 4;   // Disable XBBCode parsing
 const NO_SMILIES = 8;   // Disable Smilies parsing
-const NO_HTMLESC = 16;  // Disable HTML escaping
+const NO_HTMLESC = 16;  // Disable HTML escaping (only if NO_CODE is not set)
 const NO_STDLIB  = 32;  // Prevent the loading of the Stdlib
 
 //
@@ -68,6 +69,7 @@ END;
 class Parser {
 	// Parser flags
 	private $flags = 0;
+	private $used = false;
 	
 	// Tag names for special tags
 	private $halt_tag_name = "halt";
@@ -80,7 +82,9 @@ class Parser {
 	
 	// Tags and smilies list
 	private $tags    = array();
+	
 	private $smilies = array();
+	private $smilies_prefix = '';
 	
 	public function __construct($flags = 0) {
 		$this->flags = $flags;
@@ -94,12 +98,19 @@ class Parser {
 		}
 	}
 	
+	private function CheckUsed() {
+		if($this->used) {
+			throw new Exception("Once a parser is used, it cannot be modified");
+		}
+	}
+	
 	// === Stdlib functions =====================================================
 	
 	//
 	// Import default tags from the stdlib
 	//
 	public function ImportStdTags() {
+		$this->CheckUsed();
 		StdTags::import($this);
 		return $this;
 	}
@@ -108,6 +119,7 @@ class Parser {
 	// Import default smilies from the stdlib
 	//
 	public function ImportStdSmilies() {
+		$this->CheckUsed();
 		StdSmilies::import($this);
 		return $this;
 	}
@@ -118,6 +130,7 @@ class Parser {
 	// Enable a specific flag
 	//
 	public function SetFlag($flag) {
+		$this->CheckUsed();
 		$this->flags = $this->flags | $flag;
 		return $this;
 	}
@@ -126,6 +139,7 @@ class Parser {
 	// Disable a specific flag
 	//
 	public function UnsetFlag($flag) {
+		$this->CheckUsed();
 		$this->flags = $this->flags & ~$flag;
 		return $this;
 	}
@@ -145,6 +159,7 @@ class Parser {
 			return $this->flags;
 		endif;
 		
+		$this->CheckUsed();
 		$this->flags = (int) $flags;
 		return $this;
 	}
@@ -158,6 +173,7 @@ class Parser {
 		if($tag === null)
 			return $this->halt_tag_name;
 		
+		$this->CheckUsed();
 		$this->halt_tag_name = $this->ValidateTagName($tag, true);
 		return $this;
 	}
@@ -169,6 +185,7 @@ class Parser {
 		if($tag === null)
 			return $this->lead_tag_name;
 		
+		$this->CheckUsed();
 		$this->lead_tag_name = $this->ValidateTagName($tag, true);
 		return $this;
 	}
@@ -180,6 +197,7 @@ class Parser {
 		if($tag === null)
 			return $this->meta_tag_name;
 		
+		$this->CheckUsed();
 		$this->meta_tag_name = $this->ValidateTagName($tag, true);
 		return $this;
 	}
@@ -191,6 +209,7 @@ class Parser {
 		if($mainTag === null)
 			return $this->main_tag;
 		
+		$this->CheckUsed();
 		$this->main_tag = $mainTag;
 		return $this;
 	}
@@ -202,6 +221,7 @@ class Parser {
 		if($rootTag === null)
 			return $this->root_tag;
 		
+		$this->CheckUsed();
 		$this->root_tag = $rootTag;
 		return $this;
 	}
@@ -210,6 +230,8 @@ class Parser {
 	// Define a new tag for this parser
 	//
 	public function DefineTag($tag_name, TagDefinition $tag_def) {
+		$this->CheckUsed();
+		
 		$tag_name = $this->ValidateTagName($tag_name, true);
 		$this->tags[$tag_name] = $tag_def;
 		
@@ -263,12 +285,52 @@ class Parser {
 		return strtolower($tag);
 	}
 	
+	// === Smilies functions ===================================================
+	
+	//
+	// Define a single smiley or replace an already existing one
+	//
+	public function DefineSmiley($code, $img) {
+		$this->CheckUsed();
+		$this->smilies[$code] = $img;
+	}
+	
+	//
+	// Remove a single smiley from the parser smilies table
+	//
+	public function RemoveSmiley($code) {
+		$this->CheckUsed();
+		unset($this->smilies[$code]);
+	}
+	
+	//
+	// Clean the smilies table, removing all defined smilies
+	//
+	public function RemoveAllSmilies() {
+		$this->CheckUsed();
+		$this->smilies = array();
+	}
+	
+	//
+	// Set and retrieve the smilies prefix
+	//
+	public function SmiliesPrefix($prefix = null) {
+		if($prefix === null)
+			return $this->smilies_prefix;
+		
+		$this->CheckUsed();
+		$this->smilies_prefix = $prefix;
+		return $this;
+	}
+	
 	// === Main parsing functions ==============================================
 	
 	//
 	// Main parsing function, take XBBCode as input and outputs HTML
 	//
 	public function Parse($code) {
+		$this->used = true;
+		
 		// Handle halt parser
 		if($this->halt_tag_name && ($halt_offset = stripos($code, "[$this->halt_tag_name]")) !== false)
 			$code = substr($code, 0, $halt_offset);
@@ -375,9 +437,43 @@ class Parser {
 	//
 	// Parse and replace smilies in the XBBC document
 	//
-	private function ParseSmilies($html) {
-		// TODO
-		return $html;
+	public function ParseSmilies($text, $escaped = false) {
+		// Check if we need to handle smilies
+		if($this->HasFlag(NO_SMILIES) || empty($this->smilies))
+			return $text;
+		
+		// Flag the parser as used
+		$this->used = true;
+		
+		// The replacer function
+		$smilies_replacer = function($matches) use ($escaped) {
+			// Decode the smiley if the input was htmlspecialchars'd
+			$smiley = $escaped ? htmlspecialchars_decode($matches[0]) : $matches[0];
+			
+			if(isset($this->smilies[$smiley])) {
+				$url = $this->smilies_prefix.$this->smilies[$smiley];
+				return '<img src="'.$url.'" alt="'.htmlspecialchars($smiley).'" />';
+			} else {
+				return $matches[0];
+			}
+		};
+		
+		// Regex cache & compiler
+		static $regex, $e_regex;
+		if(!$regex) {
+			$regex = $e_regex = '/(?<=\s)(?:';
+			
+			foreach($this->smilies as $smiley => $_) {
+				$regex   .= preg_quote($smiley, '/').'|';
+				$e_regex .= preg_quote(htmlspecialchars($smiley), '/').'|';
+			}
+			
+			$regex   = substr($regex, 0, -1).')(?=\s)/i';
+			$e_regex = substr($e_regex, 0, -1).')(?=\s)/i';
+		}
+		
+		// Smilies replacing
+		$text = preg_replace_callback($escaped ? $e_regex : $regex, $smilies_replacer, " $text ");
+		return substr($text, 1, -1);
 	}
 }
-

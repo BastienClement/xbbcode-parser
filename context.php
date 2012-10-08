@@ -52,21 +52,28 @@ class Context {
 		
 		if($this->stack->Head()->CanShift($tag)) {
 			if($this->stack->Mutated()) {
+				// Stack mutated by CanShift, try again!
 				return $this->Shift($tag);
 			} else {
 				// Check nesting
 				if($limit = $tag->MaxNesting()) {
 					if(!$this->stack->CheckNesting($tag->Element(), $limit, $index)) {
+						// This tag is over-nested
 						$this->stack->Pick($index)->OverNestingIncr();
 						return false;
 					}
 				}
 				
+				// Push the tag on the stack
 				if($this->stack->Push($tag)) {
-					if($tag->EmptyTag())
+					if($tag->EmptyTag()) {
+						// Auto-closing tag if this is an empty tag
 						$this->Reduce($tag->Element());
+					}
+					
 					return true;
 				} else {
+					// Something went wrong... Maybe a stack overflow
 					return false;
 				}
 			}
@@ -90,10 +97,13 @@ class Context {
 	// If the stack doesn't contains this element, this function does nothing.
 	//
 	public function Reduce($el) {
-		// The stack doesn't contain the element
-		if(!($idx = $this->stack->Find($el)))
+		// Search for the given element into the stack
+		if(!($idx = $this->stack->Find($el))) {
+			// The stack doesn't contain the element
 			return false;
+		}
 		
+		// Attempt to consider over-nested closing tag when reducing
 		if(($tag = $this->stack->Pick($idx)) && $tag->IsOverNested()) {
 			$tag->OverNestingDecr();
 			return false;
@@ -103,8 +113,9 @@ class Context {
 		$nb = $this->stack->Count() - $idx;
 		
 		// Don't auto-close elements if the head does not allow children
-		if(!$this->stack->Head()->AllowChilds() && $nb > 1)
+		if(!$this->stack->Head()->AllowChilds() && $nb > 1) {
 			return false;
+		}
 		
 		$this->ReduceElements($nb);
 		return true;
@@ -121,7 +132,6 @@ class Context {
 		
 		// Close all tags left open, don't touch the root tag
 		$this->ReduceElements($open_tags);
-		
 		
 		// The last tag in the stack is the root tag
 		$html = $this->stack->Pop()->Reduce();
