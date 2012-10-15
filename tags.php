@@ -321,5 +321,7 @@ class MainTag extends SimpleTag {
 			$this->ctx->stack->Head()->Bufferize($ps[$i]);
 		}
 	}
+	
+	public function StripWhitespaces() { return true; }
 }
 
