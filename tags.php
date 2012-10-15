@@ -161,6 +161,10 @@ abstract class TagDefinition {
 	// Flush the text buffer into content buffer
 	//
 	public function FlushText() {
+		// Return if empty buffer
+		if(!$this->text_buffer)
+			return $this;
+		
 		// Escape HTML if required
 		if($this->buffer_escape)
 			$this->text_buffer = TagTools::EscapeText($this->text_buffer, $this->StripWhitespaces());
@@ -320,6 +324,11 @@ class MainTag extends SimpleTag {
 			$this->ctx->Reduce('$p');
 			$this->ctx->stack->Head()->Bufferize($ps[$i]);
 		}
+	}
+	
+	public function Reduce() {
+		$this->content = preg_replace('/^(\s|<br \/>)+|(\s|<br \/>)+$/', '', $this->FlushText()->content);
+		return parent::Reduce();
 	}
 }
 
