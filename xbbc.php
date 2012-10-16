@@ -130,7 +130,6 @@ class Parser {
 	// Enable a specific flag
 	//
 	public function SetFlag($flag) {
-		$this->CheckUsed();
 		$this->flags = $this->flags | $flag;
 		return $this;
 	}
@@ -139,7 +138,6 @@ class Parser {
 	// Disable a specific flag
 	//
 	public function UnsetFlag($flag) {
-		$this->CheckUsed();
 		$this->flags = $this->flags & ~$flag;
 		return $this;
 	}
@@ -159,7 +157,6 @@ class Parser {
 			return $this->flags;
 		endif;
 		
-		$this->CheckUsed();
 		$this->flags = (int) $flags;
 		return $this;
 	}
