@@ -89,7 +89,8 @@ abstract class TagDefinition {
 		$tag->ctx     = $ctx;
 		$tag->parser  = $ctx->parser;
 		
-		$tag->__create();
+		if($tag->__create() === false)
+			return false;
 		
 		return $tag;
 	}

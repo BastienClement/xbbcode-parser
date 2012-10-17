@@ -394,7 +394,7 @@ class Parser {
 							$tag = $this->TagDefinition($el)->create($ctx, $el, $arg, $xargs);
 							
 							// Shifted successfully
-							if($ctx->Shift($tag)) {
+							if($tag && $ctx->Shift($tag)) {
 								continue;
 							}
 						}
