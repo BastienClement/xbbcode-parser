@@ -435,7 +435,7 @@ class Parser {
 		
 		$xargs = array();
 		foreach($matches as $match)
-			$xargs[$match[1]] = isset($match[2]) ? stripcslashes($match[2]) : true;
+			$xargs[strtolower($match[1])] = isset($match[2]) ? stripcslashes($match[2]) : true;
 		
 		return $xargs;
 	}
