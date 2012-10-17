@@ -29,7 +29,6 @@ class Exception extends \Exception {};
 require "context.php";
 require "stack.php";
 require "tags.php";
-require "stdlib.php";
 
 //
 // Parsing flags
@@ -40,7 +39,6 @@ const PARSE_LEAD = 2;   // Only parse lead paragraph if available
 const NO_CODE    = 4;   // Disable XBBCode parsing
 const NO_SMILIES = 8;   // Disable Smilies parsing
 const NO_HTMLESC = 16;  // Disable HTML escaping (only if NO_CODE is not set)
-const NO_STDLIB  = 32;  // Prevent the loading of the Stdlib
 
 //
 // Regex used for parsing
@@ -91,37 +89,12 @@ class Parser {
 		
 		$this->main_tag = new MainTag;
 		$this->root_tag = new RootTag;
-		
-		if(!$this->HasFlag(NO_STDLIB)) {
-			$this->ImportStdTags();
-			$this->ImportStdSmilies();
-		}
 	}
 	
 	private function CheckUsed() {
 		if($this->used) {
 			throw new Exception("Once a parser is used, it cannot be modified");
 		}
-	}
-	
-	// === Stdlib functions =====================================================
-	
-	//
-	// Import default tags from the stdlib
-	//
-	public function ImportStdTags() {
-		$this->CheckUsed();
-		StdTags::import($this);
-		return $this;
-	}
-	
-	//
-	// Import default smilies from the stdlib
-	//
-	public function ImportStdSmilies() {
-		$this->CheckUsed();
-		StdSmilies::import($this);
-		return $this;
 	}
 	
 	// === Flags functions ======================================================

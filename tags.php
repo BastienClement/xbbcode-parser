@@ -257,23 +257,6 @@ class SingleTag extends TagDefinition {
 	public function Reduce() { return $this->html; }
 }
 
-// === Abstract tag templates ==================================================
-
-//
-// An abstract tag allowing an argument as content
-//
-abstract class ArgAsContentTag extends TagDefinition {
-	public function __create() {
-		if($this->arg)
-			$this->Bufferize($this->arg);
-	}
-	
-	public function EmptyTag() {
-		// Autoclose if argument is given (we already have the tag content)
-		return $this->arg;
-	}
-}
-
 // === System tags =============================================================
 
 //
