@@ -44,18 +44,18 @@ const NO_HTMLESC = 16;  // Disable HTML escaping (only if NO_CODE is not set)
 // Regex used for parsing
 //
 const REGEX_TAG_NAME = '/[\w\-\*]/i';
-const REGEX_XARGS = '/[ \t]+(\w+)(?:[=:](?|"((?:\\\\.|[^"])*)"|([^ \t]*)))?/';
+const REGEX_XARGS = '/[ \t]+(\w+)(?:[=:](?|"((?:\\.|[^"])*)"|([^ \t]*)))?/';
 const REGEX_TAG = <<<END
 /^
-	\[
+	\\[
 		(?|
 			# Close tag
-			(\/)  ([\w\-\*]+)
+			(\\/)  ([\w\-\*]+)
 		|
 			# Open tag
-			()    ([\w\-\*]+)  (?:[=:]([^ \t]+))?  ((?:  [ \t]+\w+(?:[=:](?|"(?:\\\\.|[^"])*"|[^ \t]*))?  )*)
+			()    ([\\w\\-\\*]+)  (?:[=:]([^ \t]+))?  ((?:  [ \\t]+\w+(?:[=:](?|"(?:\\\\.|[^"])*"|[^ \\t]*))?  )*)
 		)
-	\]
+	\\]
 $/x
 END;
 
@@ -383,11 +383,11 @@ class Parser {
 			$html = $ctx->ReduceAll();
 		} else {
 			$html = $this->HasFlag(NO_HTMLESC) ? $code : htmlspecialchars($code);
+			
+			// Parse smilies if not disabled
+			if(!$this->HasFlag(NO_SMILIES))
+				$html = $this->ParseSmilies($html);
 		}
-		
-		// Parse smilies if not disabled
-		if(!$this->HasFlag(NO_SMILIES))
-			$html = $this->ParseSmilies($html);
 		
 		return $html;
 	}
@@ -440,15 +440,15 @@ class Parser {
 		// Regex cache & compiler
 		static $regex, $e_regex;
 		if(!$regex) {
-			$regex = $e_regex = '/(?<=\s)(?:';
+			$regex = $e_regex = '/(?<=\s|<br \/>)(?:';
 			
 			foreach($this->smilies as $smiley => $_) {
 				$regex   .= preg_quote($smiley, '/').'|';
 				$e_regex .= preg_quote(htmlspecialchars($smiley), '/').'|';
 			}
 			
-			$regex   = substr($regex, 0, -1).')(?=\s)/i';
-			$e_regex = substr($e_regex, 0, -1).')(?=\s)/i';
+			$regex   = substr($regex, 0, -1).')(?=\s|<br \/>)/im';
+			$e_regex = substr($e_regex, 0, -1).')(?=\s|<br \/>)/im';
 		}
 		
 		// Smilies replacing
