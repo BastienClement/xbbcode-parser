@@ -114,8 +114,7 @@ abstract class TagDefinition {
 	// Append already escaped content to buffer
 	//
 	public function Append($html) {
-		$this->FlushText();
-		$this->content .= $html;
+		$this->FlushText()->content .= $html;
 		return $this;
 	}
 	
@@ -149,6 +148,13 @@ abstract class TagDefinition {
 	public function Display() { return $this->display; }
 	
 	//
+	// Return the tag's content after flushing the text buffer
+	//
+	protected function Content() {
+		return $this->FlushText()->content;
+	}
+	
+	//
 	// Return the element of this tag (eg: b, i, url)
 	//
 	public function Element() { return $this->element; }
@@ -161,7 +167,7 @@ abstract class TagDefinition {
 	//
 	// Flush the text buffer into content buffer
 	//
-	public function FlushText() {
+	protected function FlushText() {
 		// Return if empty buffer
 		if(!$this->text_buffer)
 			return $this;
@@ -205,8 +211,7 @@ abstract class TagDefinition {
 	// Return the HTML code for this tag
 	//
 	public function Reduce() {
-		$this->FlushText();
-		return $this->content;
+		return $this->Content();
 	}
 }
 
@@ -294,7 +299,7 @@ class MainTag extends SimpleTag {
 		// Note: displayed inline so exits automatically when adding a block element.
 	}
 	
-	public function __create() {
+	protected function __create() {
 		$this->element = '$p';
 	}
 	
@@ -311,7 +316,7 @@ class MainTag extends SimpleTag {
 	}
 	
 	public function Reduce() {
-		$this->content = preg_replace('/^(\s|<br \/>)+|(\s|<br \/>)+$/', '', $this->FlushText()->content);
+		$this->content = preg_replace('/^(\s|<br \/>)+|(\s|<br \/>)+$/', '', $this->Content());
 		return parent::Reduce();
 	}
 }
