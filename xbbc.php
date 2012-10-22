@@ -53,7 +53,7 @@ const REGEX_TAG = <<<END
 			(\\/)  ([\w\-\*]+)
 		|
 			# Open tag
-			()    ([\\w\\-\\*]+)  (?:[=:]([^ \t]+))?  ((?:  [ \\t]+\w+(?:[=:](?|"(?:\\\\.|[^"])*"|[^ \\t]*))?  )*)
+			()    ([\\w\\-\\*]+)  (?:[=:](?|"((?:\\.|[^"])*)"|([^ \t]*)))?  ((?:  [ \\t]+\w+(?:[=:](?|"(?:\\\\.|[^"])*"|[^ \\t]*))?  )*)
 		)
 	\\]
 $/x
@@ -359,7 +359,7 @@ class Parser {
 								continue;
 							}
 						} else if($ctx->stack->Head()->AllowChilds()) {
-							$arg   = (!empty($arg)) ? $arg : null;
+							$arg   = (!empty($arg)) ? stripcslashes($arg) : null;
 							$xargs = (!empty($xargs) && ($xargs[0] == ' ' || $xargs[0] == "\t"))
 								? $this->ParseXArgs($xargs)
 								: null;
