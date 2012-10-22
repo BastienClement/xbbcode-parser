@@ -111,6 +111,11 @@ abstract class TagDefinition {
 	public function AllowText() { return true; }
 	
 	//
+	// And smilies ?
+	//
+	public function AllowSmilies() { return true; }
+	
+	//
 	// Append already escaped content to buffer
 	//
 	public function Append($html) {
@@ -177,7 +182,8 @@ abstract class TagDefinition {
 			$this->text_buffer = TagTools::EscapeText($this->text_buffer, $this->StripWhitespaces());
 		
 		// Parse smilies before reducing text-node
-		$this->text_buffer = $this->ctx->parser->ParseSmilies($this->text_buffer, $this->buffer_escape);
+		if($this->AllowSmilies())
+			$this->text_buffer = $this->ctx->parser->ParseSmilies($this->text_buffer, $this->buffer_escape);
 		
 		// Append the text node to the content buffer and clear the text buffer
 		$this->content .= $this->text_buffer;
@@ -244,7 +250,8 @@ class LeafTag extends SimpleTag {
 		parent::__construct($before, $after, $block);
 	}
 	
-	public function AllowChilds() { return false; }
+	public function AllowChilds()  { return false; }
+	public function AllowSmilies() { return false; }
 }
 
 //
