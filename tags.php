@@ -119,7 +119,9 @@ abstract class TagDefinition {
 	// Append already escaped content to buffer
 	//
 	public function Append($html) {
-		$this->FlushText()->content .= $html;
+		if($html) {
+			$this->FlushText()->content .= $html;
+		}
 		return $this;
 	}
 	
