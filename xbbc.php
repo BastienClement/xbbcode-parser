@@ -40,6 +40,8 @@ const NO_CODE    = 4;   // Disable XBBCode parsing
 const NO_SMILIES = 8;   // Disable Smilies parsing
 const NO_HTMLESC = 16;  // Disable HTML escaping (only if NO_CODE is not set)
 
+const SMILIES_OPTIMIZER = 32;  // Enable the optional smilies optimizer
+
 //
 // Regex used for parsing
 //
@@ -438,7 +440,7 @@ class Parser {
 		};
 		
 		// Regex cache & compiler
-		static $regex, $e_regex;
+		static $regex, $e_regex, $smilies_identifiers;
 		if(!$regex) {
 			$regex = $e_regex = '/(?<=\s|<br \/>)(?:';
 			
@@ -449,10 +451,71 @@ class Parser {
 			
 			$regex   = substr($regex, 0, -1).')(?=\s|<br \/>)/im';
 			$e_regex = substr($e_regex, 0, -1).')(?=\s|<br \/>)/im';
+			
+			// --- Smilies optimizer ---
+			if($this->HasFlag(SMILIES_OPTIMIZER)) {
+				$smilies_identifiers = array();
+				$buckets = array();
+				
+				foreach($this->smilies as $smiley => $_) {
+					// Split smiliey to chars and put them in buckets
+					foreach(str_split($smiley) as $char) {
+						if(!isset($buckets[$char]))
+							$buckets[$char] = array();
+						
+						$buckets[$char][] = $smiley;
+					}
+				}
+				
+				// Move the biggest bucket first
+				uasort($buckets, function($a, $b) {
+					return count($b) - count($a);
+				});
+				
+				// Keep trace of already encountered smiley
+				$smilies_identified = array();
+				
+				// Clean up buckets a bit
+				foreach($buckets as $char => &$bucket) {
+					// Remove duplicated smilies already encountered
+					$bucket = array_filter($bucket, function($smiley) use (&$smilies_identified) {
+						if(isset($smilies_identified[$smiley])) {
+							return false;
+						} else {
+							$smilies_identified[$smiley] = true;
+							return true;
+						}
+					});
+					
+					// Bucket is not empty, so its char-key is useful for smilies detection
+					if(count($bucket) > 0) {
+						$smilies_identifiers[] = $char;
+					}
+				}
+			}
 		}
 		
 		// Smilies replacing
-		$text = preg_replace_callback($escaped ? $e_regex : $regex, $smilies_replacer, " $text ");
-		return substr($text, 1, -1);
+		
+		if($this->HasFlag(SMILIES_OPTIMIZER)) {
+			$found = false;
+			foreach($smilies_identifiers as $char) {
+				// Assuming most text nodes doesn't contains smilies, strpos
+				// fails faster than a useless preg_replace.
+				if(strpos($text, $char) !== false) {
+					$found = true;
+					break;
+				}
+			}
+		} else {
+			$found = true;
+		}
+		
+		if($found) {
+			$text = preg_replace_callback($escaped ? $e_regex : $regex, $smilies_replacer, " $text ");
+			return substr($text, 1, -1);
+		} else {
+			return $text;
+		}
 	}
 }
