@@ -86,6 +86,10 @@ class Parser {
 	private $smilies = array();
 	private $smilies_prefix = '';
 	
+	// Results from last parsing
+	private $last_meta = null;
+	private $last_has_lead = null;
+	
 	public function __construct($flags = 0) {
 		$this->flags = $flags;
 		
@@ -330,14 +334,21 @@ class Parser {
 			
 			if($this->HasFlag(PARSE_META))
 				return $meta;
+			else
+				$this->last_meta = $meta;
+		} else {
+			$this->last_meta = null;
 		}
 		
 		// Handle lead parsing
 		if($this->lead_tag_name && ($lead_offset = stripos($code, "[$this->lead_tag_name]")) !== false) {
+			$this->last_has_lead = true;
 			if($this->HasFlag(PARSE_LEAD))
 				$code = substr($code, 0, $lead_offset);
 			else
 				$code = substr($code, 0, $lead_offset).substr($code, $lead_offset + strlen($this->lead_tag_name) + 2);
+		} else {
+			$this->last_has_lead = false;
 		}
 		
 		// Parse XBBCode if not disabled
@@ -392,6 +403,20 @@ class Parser {
 		}
 		
 		return $html;
+	}
+
+	//
+	// Metadata from last parsing
+	//
+	public function LastMeta() {
+		return $this->last_meta;
+	}
+	
+	//
+	// Does the last string parsed used the [more] tag ?
+	//
+	public function LastHasLead() {
+		return $this->last_has_lead;
 	}
 	
 	//
