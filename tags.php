@@ -48,10 +48,14 @@ abstract class TagTools {
 	
 	public static function EscapeText($text, $strip = false) {
 		return str_replace(
-			array("\n\r", "\r\n", "\n", "\r"),
+			"\n",
 			'<br />',
 			htmlspecialchars($strip ? trim($text) : $text)
 		);
+	}
+	
+	public static function PrefixLines($text, $prefix) {
+		return implode("\n", array_map(function($line) use($prefix) { return "$prefix$line"; }, explode("\n", $text)));
 	}
 }
 
@@ -180,11 +184,11 @@ abstract class TagDefinition {
 			return $this;
 		
 		// Escape HTML if required
-		if($this->buffer_escape)
+		if($this->buffer_escape && !$this->parser->HasFlag(PLAIN_TEXT))
 			$this->text_buffer = TagTools::EscapeText($this->text_buffer, $this->StripWhitespaces());
 		
 		// Parse smilies before reducing text-node
-		if($this->AllowSmilies())
+		if($this->AllowSmilies() && !$this->parser->HasFlag(PLAIN_TEXT))
 			$this->text_buffer = $this->ctx->parser->ParseSmilies($this->text_buffer, $this->buffer_escape);
 		
 		// Append the text node to the content buffer and clear the text buffer
@@ -221,6 +225,18 @@ abstract class TagDefinition {
 	public function Reduce() {
 		return $this->Content();
 	}
+	
+	//
+	// Return plaintext for this tag
+	//
+	public function ReducePlaintext() {
+		switch($this->Display()) {
+			case DISPLAY_INLINE:
+				return $this->Content();
+			default:
+				return "\n".$this->Content()."\n";
+		}
+	}
 }
 
 // === Tag templates ===========================================================
@@ -229,18 +245,24 @@ abstract class TagDefinition {
 // A very simple tag surrounding its content with user-defined strings.
 //
 class SimpleTag extends TagDefinition {
-	protected $before, $after;
+	protected $before, $after, $plaintext;
 	protected $strip_empty = true;
 	
-	public function __construct($before, $after, $block = false) {
-		$this->before  = $before;
-		$this->after   = $after;
-		$this->display = $block ? DISPLAY_BLOCK : DISPLAY_INLINE;
+	public function __construct($before, $after, $block = false, $plaintext = '') {
+		$this->before    = $before;
+		$this->after     = $after;
+		$this->display   = $block ? DISPLAY_BLOCK : DISPLAY_INLINE;
+		$this->plaintext = $plaintext;
 	}
 	
 	public function Reduce() {
 		$content = parent::Reduce();
 		return empty($content) && $this->strip_empty ? '': $this->before.$content.$this->after;
+	}
+	
+	public function ReducePlaintext() {
+		$content = parent::ReducePlaintext();
+		return empty($content) && $this->strip_empty ? '': $this->plaintext.$content.$this->plaintext;
 	}
 }
 
@@ -248,8 +270,8 @@ class SimpleTag extends TagDefinition {
 // A leaf tag disallowing all children.
 //
 class LeafTag extends SimpleTag {
-	public function __construct($before, $after, $block = false) {
-		parent::__construct($before, $after, $block);
+	public function __construct($before, $after, $block = false, $plaintext = '') {
+		parent::__construct($before, $after, $block, $plaintext);
 	}
 	
 	public function AllowChilds()  { return false; }
@@ -260,15 +282,17 @@ class LeafTag extends SimpleTag {
 // A single tag without closing tag required and without content
 //
 class SingleTag extends TagDefinition {
-	protected $html;
+	protected $html, $plaintext;
 	
-	public function __construct($html, $block = false) {
-		$this->html    = $html;
-		$this->display = $block ? DISPLAY_BLOCK : DISPLAY_INLINE;
+	public function __construct($html, $block = false, $plaintext = '') {
+		$this->html      = $html;
+		$this->display   = $block ? DISPLAY_BLOCK : DISPLAY_INLINE;
+		$this->plaintext = $plaintext;
 	}
 	
 	public function EmptyTag() { return true; }
 	public function Reduce() { return $this->html; }
+	public function ReducePlaintext() { return $this->plaintext; }
 }
 
 // === System tags =============================================================
@@ -297,6 +321,10 @@ class RootTag extends SimpleTag {
 		
 		return true;
 	}
+	
+	public function ReducePlaintext() {
+		return trim(preg_replace(array('/^[ \t]+/m', '/\n{2,}/'), array('', "\n\n"), parent::ReducePlaintext()));
+	}
 }
 
 //
@@ -313,7 +341,7 @@ class MainTag extends SimpleTag {
 	}
 	
 	public function Bufferize($txt) {
-		$ps = preg_split('/[\n\r]{2,}/', $txt);
+		$ps = preg_split('/\n{2,}/', $txt);
 		
 		if(($c = count($ps)) < 1) return;
 		parent::Bufferize($ps[0]);
@@ -327,6 +355,10 @@ class MainTag extends SimpleTag {
 	public function Reduce() {
 		$this->content = preg_replace('/^(\s|<br \/>)+|(\s|<br \/>)+$/', '', $this->Content());
 		return parent::Reduce();
+	}
+	
+	public function ReducePlaintext() {
+		return "\n".parent::ReducePlaintext()."\n";
 	}
 }
 

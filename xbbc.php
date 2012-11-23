@@ -41,6 +41,7 @@ const NO_SMILIES = 8;   // Disable Smilies parsing
 const NO_HTMLESC = 16;  // Disable HTML escaping (only if NO_CODE is not set)
 
 const SMILIES_OPTIMIZER = 32;  // Enable the optional smilies optimizer
+const PLAIN_TEXT = 64;  // Produce plain-text output
 
 //
 // Regex used for parsing
@@ -316,6 +317,9 @@ class Parser {
 	public function Parse($code) {
 		$this->used = true;
 		
+		// Line-breaks normalization
+		$code = str_replace(array("\n\r", "\r\n", "\n", "\r"), "\n", $code);
+		
 		// Handle halt parser
 		if($this->halt_tag_name && ($halt_offset = stripos($code, "[$this->halt_tag_name]")) !== false)
 			$code = substr($code, 0, $halt_offset);
@@ -394,6 +398,10 @@ class Parser {
 			
 			// Compile and generate HTML from the stack
 			$html = $ctx->ReduceAll();
+			
+			if($this->HasFlag(PLAIN_TEXT) && !$this->HasFlag(NO_HTMLESC)) {
+				$html = htmlspecialchars($html);
+			}
 		} else {
 			$html = $this->HasFlag(NO_HTMLESC) ? $code : htmlspecialchars($code);
 			
