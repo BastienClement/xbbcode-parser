@@ -88,7 +88,7 @@ class Context {
 	public function ReduceElements($nb) {
 		for($i = 0; $i < $nb; $i++) {
 			$tag = $this->stack->Pop();
-			$this->stack->Head()->Append($this->parser->HasFlag(PLAIN_TEXT) ? $tag->ReducePlaintext() : $tag->Reduce());
+			$this->stack->Head()->Append($this->DoReduce($tag));
 		}
 	}
 	
@@ -134,13 +134,20 @@ class Context {
 		$this->ReduceElements($open_tags);
 		
 		// The last tag in the stack is the root tag
-		$root = $this->stack->Pop();
-		$html = $this->parser->HasFlag(PLAIN_TEXT) ? $root->ReducePlaintext() : $root->Reduce();
+		$html = $this->DoReduce($this->stack->Pop());
 		
 		// Clean the stack
 		unset($this->stack);
 		
 		return $html;
+	}
+	
+	protected function DoReduce($tag) {
+		if($reducer = $this->parser->CustomReducer()) {
+			return $reducer($tag, $this);
+		} else {
+			return ($this->parser->HasFlag(PLAIN_TEXT)) ? $tag->ReducePlaintext() : $tag->Reduce();
+		}
 	}
 }
 

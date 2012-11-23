@@ -91,6 +91,9 @@ class Parser {
 	private $last_meta = null;
 	private $last_has_lead = null;
 	
+	// A custom reducer function
+	private $custom_reducer = null;
+	
 	public function __construct($flags = 0) {
 		$this->flags = $flags;
 		
@@ -310,6 +313,24 @@ class Parser {
 	}
 	
 	// === Main parsing functions ==============================================
+	
+	//
+	// Set and retrieve the special meta tag name
+	//
+	public function CustomReducer($fn = false) {
+		if($fn === false) {
+			return $this->custom_reducer;
+		}
+		
+		$this->CheckUsed();
+		if($fn === null) {
+			$this->custom_reducer = null;
+		} else if(is_callable($fn)) {
+			$this->custom_reducer = $fn;
+		}
+		
+		return $this;
+	}
 	
 	//
 	// Main parsing function, take XBBCode as input and outputs HTML
