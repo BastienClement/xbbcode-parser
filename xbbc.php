@@ -487,7 +487,7 @@ class Parser {
 			
 			if(isset($this->smilies[$smiley])) {
 				$url = $this->smilies_prefix.$this->smilies[$smiley];
-				return '<img src="'.$url.'" alt="'.htmlspecialchars($smiley).'" />';
+				return '<img src="'.$url.'" alt="'.htmlspecialchars($smiley).'" class="smiley" />';
 			} else {
 				return $matches[0];
 			}
