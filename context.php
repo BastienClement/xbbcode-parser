@@ -1,6 +1,6 @@
 <?php
 //
-//  Copyright (C) 2012 Unnamed Lab <http://www.unnamed.eu/>
+//  Copyright (C) 2014 Bastien Clément <g@ledric.me>
 //
 //  Permission is hereby granted, free of charge, to any person obtaining
 //  a copy of this software and associated documentation files (the
@@ -30,26 +30,26 @@ namespace XBBC;
 class Context {
 	// The parent parser
 	public $parser;
-	
+
 	// The parse stack
 	public $stack;
-	
+
 	public function __construct(Parser $parser) {
 		$this->parser = $parser;
-		
+
 		$this->stack = new Stack($this);
 		$this->stack->Push($parser->RootTag()->create($this));
 	}
-	
+
 	// === Stack manipulation functions ========================================
-	
+
 	//
 	// Add a tag on the stack
 	//
 	public function Shift(TagDefinition $tag) {
 		// Clear the mutation tracking flag
 		$this->stack->MutatedReset();
-		
+
 		if($this->stack->Head()->CanShift($tag)) {
 			if($this->stack->Mutated()) {
 				// Stack mutated by CanShift, try again!
@@ -63,14 +63,14 @@ class Context {
 						return false;
 					}
 				}
-				
+
 				// Push the tag on the stack
 				if($this->stack->Push($tag)) {
 					if($tag->EmptyTag()) {
 						// Auto-closing tag if this is an empty tag
 						$this->Reduce($tag->Element());
 					}
-					
+
 					return true;
 				} else {
 					// Something went wrong... Maybe a stack overflow
@@ -78,10 +78,10 @@ class Context {
 				}
 			}
 		}
-		
+
 		return false;
 	}
-	
+
 	//
 	// Reduce a given number of element from the stack
 	//
@@ -91,7 +91,7 @@ class Context {
 			$this->stack->Head()->Append($this->DoReduce($tag));
 		}
 	}
-	
+
 	//
 	// Reduce elements on the stack until a given element is encountered.
 	// If the stack doesn't contains this element, this function does nothing.
@@ -102,25 +102,25 @@ class Context {
 			// The stack doesn't contain the element
 			return false;
 		}
-		
+
 		// Attempt to consider over-nested closing tag when reducing
 		if(($tag = $this->stack->Pick($idx)) && $tag->IsOverNested()) {
 			$tag->OverNestingDecr();
 			return false;
 		}
-		
+
 		// How many elements from the top of the stack to this element (included) ?
 		$nb = $this->stack->Count() - $idx;
-		
+
 		// Don't auto-close elements if the head does not allow children
 		if(!$this->stack->Head()->AllowChilds() && $nb > 1) {
 			return false;
 		}
-		
+
 		$this->ReduceElements($nb);
 		return true;
 	}
-	
+
 	//
 	// Close all tag left open on the stack and reduce the root tag
 	//
@@ -129,19 +129,19 @@ class Context {
 		if($open_tags < 0) {
 			throw new Exception('Root tag is no longer open');
 		}
-		
+
 		// Close all tags left open, don't touch the root tag
 		$this->ReduceElements($open_tags);
-		
+
 		// The last tag in the stack is the root tag
 		$html = $this->DoReduce($this->stack->Pop());
-		
+
 		// Clean the stack
 		unset($this->stack);
-		
+
 		return $html;
 	}
-	
+
 	protected function DoReduce($tag) {
 		if($reducer = $this->parser->CustomReducer()) {
 			return $reducer($tag, $this);

@@ -1,6 +1,6 @@
 <?php
 //
-//  Copyright (C) 2012 Unnamed Lab <http://www.unnamed.eu/>
+//  Copyright (C) 2014 Bastien Clément <g@ledric.me>
 //
 //  Permission is hereby granted, free of charge, to any person obtaining
 //  a copy of this software and associated documentation files (the
@@ -30,27 +30,27 @@ namespace XBBC;
 class Stack {
 	// The default size of new stacks
 	public static $MAX_SIZE = 50;
-	
+
 	private $stack;          // The internal storage array
 	private $stack_size;     // The size of this stack
 	private $stack_head;     // Cached value of the stack head
 	private $stack_head_ptr; // Pointer to the stack head
-	
+
 	private $mutated = false;
-	
+
 	public function __construct() {
 		$this->stack = new \SplFixedArray($this->stack_size = self::$MAX_SIZE);
 		$this->stack_head = null;
 		$this->stack_head_ptr = -1;
 	}
-	
+
 	//
 	// Return the stack head
 	//
 	public function Head() {
 		return $this->stack_head;
 	}
-	
+
 	//
 	// Push a new item onto the stack
 	//
@@ -58,14 +58,14 @@ class Stack {
 		// Check for stack overflow
 		if($this->stack_head_ptr + 1 >= $this->stack_size)
 			return false;
-		
+
 		$this->mutated = true;
-		
+
 		// Insert the new head
 		$this->stack[++$this->stack_head_ptr] = $this->stack_head = $item;
 		return true;
 	}
-	
+
 	//
 	// Remove the top-most element of the stack and return it
 	//
@@ -73,29 +73,29 @@ class Stack {
 		// Stack is empty
 		if($this->stack_head_ptr < 0)
 			return null;
-		
+
 		// Move the stack head
 		if(--$this->stack_head_ptr >= 0)
 			$this->stack_head = $this->stack[$this->stack_head_ptr];
 		else
 			$this->stack_head = null;
-		
+
 		$this->mutated = true;
-		
+
 		// Return the previous head
 		return $this->stack[$this->stack_head_ptr+1];
 	}
-	
+
 	//
 	// Returns a specific element from the stack
 	//
 	public function Pick($index) {
 		if($index < 0 || $index > $this->stack_head_ptr)
 			return null;
-		
+
 		return $this->stack[$index];
 	}
-	
+
 	//
 	// Check if the stack contains a tag of the given element and return
 	// this element's location (starting at 1) from the top of the stack.
@@ -112,11 +112,11 @@ class Stack {
 				}
 			}
 		}
-		
+
 		// Element is not in the stack
 		return false;
 	}
-	
+
 	//
 	// Check if there is not too much elements of one type on the stack
 	//
@@ -127,17 +127,17 @@ class Stack {
 				return false;
 			}
 		}
-		
+
 		return true;
 	}
-	
+
 	//
 	// Count how many elements are on the stack
 	//
 	public function Count() {
 		return $this->stack_head_ptr + 1;
 	}
-	
+
 	//
 	// The stack doesn't clear previous cell when Pop() is called. Instead the
 	// head pointer is simply redefined. This function ensure that every
@@ -148,11 +148,11 @@ class Stack {
 			unset($this->stack[$i]);
 		}
 	}
-	
+
 	public function Mutated() {
 		return $this->mutated;
 	}
-	
+
 	Public function MutatedReset() {
 		$this->mutated = false;
 	}
